@@ -10,6 +10,7 @@
 #' @importFrom xml2 read_xml xml_ns_strip xml_find_all xml_text
 #' @importFrom utils download.file
 #' @importFrom zip unzip
+#' @importFrom archive archive_extract
 #' @export
 #' @examples
 #' \donttest{
@@ -87,7 +88,7 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
       } else if(download_files & !dir.exists(gsub(".7z", "", out_file)) &
                 raster) {
         download.file(url, out_file)
-        zip::unzip(out_file, exdir = out[length(out)])
+        archive::archive_extract(out_file, dir = gsub(".7z", "", out_file))
         unlink(out_file)
       } else if(!download_files) {
         out <- c(out, url)
