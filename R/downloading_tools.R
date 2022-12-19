@@ -87,7 +87,9 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
         unlink(out_file)
       } else if(download_files & !dir.exists(gsub(".7z", "", out_file)) &
                 raster) {
-        download.file(url, out_file)
+        download.file(url, out_file,
+                      method = "libcurl",
+                      mode = "wb")
         archive::archive_extract(out_file, dir = gsub(".7z", "", out_file))
         unlink(out_file)
       } else if(!download_files) {
