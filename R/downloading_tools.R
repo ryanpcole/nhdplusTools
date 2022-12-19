@@ -19,7 +19,8 @@
 #'
 #' download_nhdplushr(tempdir(), c(hu, "0203"), download_files = FALSE)
 #' }
-download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE) {
+download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
+                               raster = FALSE) {
 
   nhdhr_bucket <- get("nhdhr_bucket", envir = nhdplusTools_env)
   nhdhr_file_list <- get("nhdhr_file_list", envir = nhdplusTools_env)
@@ -57,7 +58,12 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE) {
       return(NULL)
     }
 
-    file_list <- file_list[grepl("_GDB.zip", file_list)]
+    if(!raster) {
+      file_list <- file_list[grepl("_GDB.zip", file_list)]
+    } else {
+      file_list <- file_list[grepl("_RASTER.7z", file_list)]
+    }
+
 
     if(subset_hu02[h]) {
       file_list <- file_list[sapply(file_list, function(f)
@@ -73,7 +79,13 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE) {
       hu04 <- substr(out_file, hu04, hu04 + 3)
 
       if(download_files & !dir.exists(gsub(".zip", ".gdb", out_file)) &
-         !dir.exists(file.path(dirname(out_file), paste0(hu04, ".gdb")))) {
+         !dir.exists(file.path(dirname(out_file), paste0(hu04, ".gdb"))) &
+         !raster) {
+        download.file(url, out_file)
+        zip::unzip(out_file, exdir = out[length(out)])
+        unlink(out_file)
+      } else if(download_files & !dir.exists(gsub(".7z", "", out_file)) &
+                raster) {
         download.file(url, out_file)
         zip::unzip(out_file, exdir = out[length(out)])
         unlink(out_file)
