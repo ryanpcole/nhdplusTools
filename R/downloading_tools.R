@@ -93,9 +93,14 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
                       method = "libcurl",
                       mode = "wb")
 
-        browser()
         # This fails on files > 2 GB
-        archive::archive_extract(out_file, dir = gsub(".7z$", "", out_file))
+        #archive::archive_extract(out_file, dir = gsub(".7z$", "", out_file))
+
+        # LINUX WORKAROUND - call 7zip from shell
+        # NEEDS TESTING ON WINDOWS
+        system2("7z", args = c(paste0("x -o",
+                                      dir_out),
+                      out_file))
 
         unlink(out_file)
       } else if(!download_files) {
