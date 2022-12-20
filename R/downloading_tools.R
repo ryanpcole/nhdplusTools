@@ -24,6 +24,8 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
                                raster = FALSE) {
   # Set the timeout option to something like 60 * 30 seconds
   options(timeout = 60 * 30)
+  # Check for 7z if raster == TRUE
+  if(raster) check7z()
 
   nhdhr_bucket <- get("nhdhr_bucket", envir = nhdplusTools_env)
   nhdhr_file_list <- get("nhdhr_file_list", envir = nhdplusTools_env)
@@ -87,20 +89,30 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
         download.file(url, out_file)
         zip::unzip(out_file, exdir = out[length(out)])
         unlink(out_file)
-      } else if(download_files & !dir.exists(gsub(".7z", "", out_file)) &
+      } else if(download_files & !dir.exists(paste0(dir_out, "/HRNHDPlusRasters", hu04)) &
                 raster) {
         download.file(url, out_file,
                       method = "libcurl",
                       mode = "wb")
-
-        # This fails on files > 2 GB
-        #archive::archive_extract(out_file, dir = gsub(".7z$", "", out_file))
+        # WINDOWS CMD SHELL
+        if(.Platform$OS.type == "windows") {
+          # RUN 7zip on the out file
+          closeAllConnections() # Needed to enforce file not in use
+          exit_status <- shell(shQuote(paste0("7z x -o", dir_out, " ", out_file)),
+                               mustWork =  TRUE)
+          if(exit_status == 127) {stop("Error - command not run. Exit status 127\n
+                                       Check 7zip installed and on PATH")}
+        }
 
         # LINUX WORKAROUND - call 7zip from shell
-        # NEEDS TESTING ON WINDOWS
-        system2("7z", args = c(paste0("x -o",
-                                      dir_out),
-                      out_file))
+        if(.Platform$OS.type == "linux") {
+          exit_status <- system2("7z", args = c(paste0("x -o",
+                                        dir_out),
+                        out_file),
+                  invisible = FALSE)
+          if(exit_status == 127) {stop("Error - command not run. Exit status 127\n
+                                       Check 7zip installed and on PATH")}
+        }
 
         unlink(out_file)
       } else if(!download_files) {
