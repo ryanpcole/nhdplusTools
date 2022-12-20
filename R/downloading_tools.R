@@ -22,6 +22,8 @@
 #' }
 download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
                                raster = FALSE) {
+  # Set the timeout option to something like 60 * 30 seconds
+  options(timeout = 60 * 30)
 
   nhdhr_bucket <- get("nhdhr_bucket", envir = nhdplusTools_env)
   nhdhr_file_list <- get("nhdhr_file_list", envir = nhdplusTools_env)
@@ -90,7 +92,11 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
         download.file(url, out_file,
                       method = "libcurl",
                       mode = "wb")
-        archive::archive_extract(out_file, dir = gsub(".7z", "", out_file))
+
+        browser()
+        # This fails on files > 2 GB
+        archive::archive_extract(out_file, dir = gsub(".7z$", "", out_file))
+
         unlink(out_file)
       } else if(!download_files) {
         out <- c(out, url)
