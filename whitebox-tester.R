@@ -6,3 +6,123 @@
 # This will require figuring out how to install whitebox tools as a package depenency
 # for another package - I'm not sure how hard this actually is, but I don't know
 # how to do it.
+
+# NOTE: whitebox interface creates a lot of intermediate files, hence the need to
+# define all the filepaths and folders at the beginning. Change to fit your directory
+# structure and file names
+
+# Make sure the vector and raster files are all in the correct projection
+# before running this script
+
+# Load nhdplusTools package
+devtools::load_all()
+
+library(whitebox)
+library(sf)
+
+# initiate whitebox tools
+wbt_init()
+# TODO Can I make this  multicore?
+# wbt_options(max_procs = 16L,
+#             verbose = TRUE)
+
+# use this project CRS if using NHDPlusHR rasters
+project_crs <- "ESRI:102039"
+
+# Setup -------------------------------------------------------------------
+# TODO: Define the working directory as some kind of temp file
+# This may be system dependent
+# There might be a way to do this using some nhdtools functions
+work_dir <- file.path("data", "geospatial", "DEM", "hydro-processed")
+
+# constants - you might have to play around with these to get good results
+# see whitebox tools documenatation and functions for details.
+# https://www.whiteboxgeo.com/manual/wbt_book/intro.html
+pour_pt_snap_distance <- 1000
+# breach_dist <- 10 # Shouldn't need this if using flow accumulation raster
+# flat_inc <- 0.1 # Shouldn't need this if using flow accumulation raster
+stream_thresh <- 7000
+
+# Downloading flow accumulation raster ------------------------------------
+# download the rasters
+test_rasters <- download_nhdplushr(test_dir, huc, download_files = TRUE,
+                                  raster = TRUE)
+
+# TODO Figure out how to use temp files for raster processing
+# Get the filepath for the flow accumulation raster and d8 raster
+flowaccum_raster <- ""
+
+d8_raster <- ""
+
+# output filepath for streams raster
+streams_raster <- ""
+
+# Snapping outlet points and checking format ------------------------------
+# Define the shapefile with points to delineate
+outlet_pts <- ""
+
+snapped_outlet_points <- ""
+
+# Whitebox tools part -----------------------------------------------------
+# TODO REFACTOR THIS PART
+# snap pour points to streams raster
+wbt_jenson_snap_pour_points(pour_pts = pour_points,
+                            streams = streams_raster,
+                            output = snapped_outlet_points,
+                            snap_dist = pour_pt_snap_distance,
+                            verbose_mode = TRUE)
+
+# Defining variables for watershed delineation
+# TODO
+outlet_points <- st_read(snapped_outlet_points) %>%
+  mutate(FID = seq_len(nrow(.)))
+
+# Function to delineate watersheds from d8_raster and snapped outlet points
+watershed_delineation <- function(d8_raster,
+                                  outlet_points,
+                                  output_polygon_prefix,
+                                  work_dir) {
+
+  working_outlet_point <-     "temp_outlet_point.shp"
+  working_watershed_raster <- "watershed_raster_inprogress.tif"
+
+  # Find the length of zeros to pad the filenames
+  digits <- floor(log10(nrow(outlet_points))) + 1
+
+  # TODO: speed this up with parallel processing
+  for (i in seq_len(nrow(outlet_points))) {
+    # initialize the output polygon name
+    print(paste0("Starting watershed delineation ---- ", i, "/", nrow(outlet_points)))
+    output_polygon_filename <- paste0(output_polygon_prefix,
+                                      formatC(i,
+                                              width = digits,
+                                              format = "d",
+                                              flag= "0"),
+                                      ".shp")[1] # ASSUMES THE FIRST COLUMN HAS SITE NAME
+    print(output_polygon_filename)
+    # Write a shapefile of the temporary outlet point
+    st_write(outlet_points[i,],
+             file.path(work_dir, working_outlet_point),
+             append = FALSE)
+    # use that temporary outlet point to delineate watershed
+    wbt_watershed(d8_pntr = d8_raster,
+                  pour_pts = working_outlet_point,
+                  output = working_watershed_raster,
+                  wd = work_dir)
+    # Convert that raster to a polygon
+    watershed_polygon <- paste0(work_dir, "/watershed_polygons/", output_polygon_filename)
+    wbt_raster_to_vector_polygons(input = working_watershed_raster,
+                                  output = watershed_polygon,
+                                  wd = work_dir)
+    # Add the CRS to the shapefile. First read in the polygon, then apply CRS, then write
+    polygon <- st_read(watershed_polygon)
+    st_crs(polygon) <- project_crs
+    st_write(polygon,
+             watershed_polygon,
+             append = FALSE)
+
+    # Complete!
+    print(paste0("Finished watershed delineation ---- ", i, "/", nrow(outlet_points)))
+  }
+}
+
