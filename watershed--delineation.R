@@ -27,15 +27,17 @@ wbt_init()
 #             verbose = TRUE)
 
 # use this project CRS if using NHDPlusHR rasters
+# TODO DO all NHDPlusHR rasters use this CRS?
 project_crs <- "ESRI:102039"
 
-# Setup -------------------------------------------------------------------
-# TODO: Define the working directory as some kind of temp file
-# This may be system dependent
-# There might be a way to do this using some nhdtools functions
-work_dir <- file.path("data", "geospatial", "DEM", "hydro-processed")
 
-# constants - you might have to play around with these to get good results
+# INPUTS ------------------------------------------------------------------
+
+# Working directory - where would you like to download rasters and export files
+work_dir <- file.path("testdata", "raster")
+
+# Constants - Needed for whitebox tools
+# you might have to play around with these to get good results
 # see whitebox tools documenatation and functions for details.
 # https://www.whiteboxgeo.com/manual/wbt_book/intro.html
 pour_pt_snap_distance <- 1000
@@ -43,28 +45,49 @@ pour_pt_snap_distance <- 1000
 # flat_inc <- 0.1 # Shouldn't need this if using flow accumulation raster
 stream_thresh <- 7000
 
+# Path to outlet points file name
+# First check working directory
+outlet_pts_path <- file.path("testdata", "vector", "usgs-gauges-hyunwoo.shp")
+
 # Downloading flow accumulation raster ------------------------------------
-# download the rasters
-test_rasters <- download_nhdplushr(test_dir, huc, download_files = TRUE,
+# TODO Get HUC4 from outlet points
+outlet_pts <- sf::st_read(outlet_pts_path)
+bbox <- sf::st_bbox(outlet_pts) %>%
+  sf::st_as_sfc()
+
+huc_codes <- nhdplusTools::get_huc(AOI = bbox,
+                                   t_srs = project_crs,
+                                   type = "huc04") # Only option for raster DL
+
+huc <- huc_codes$huc4
+
+
+# download the rasters.
+# This should avoid download if the rasters already exist in work_dir
+raster_dir <- download_nhdplushr(work_dir, huc, download_files = TRUE,
                                   raster = TRUE)
 
+
+
+# Define paths for raster processing --------------------------------------
 # TODO Figure out how to use temp files for raster processing
-# Get the filepath for the flow accumulation raster and d8 raster
-flowaccum_raster <- ""
 
-d8_raster <- ""
+# Get the filepath for the flow accumulation raster and d8 raster from work dir.
+# These should all be standardized names so use work_dir, subfolder path, and the
+# base file names that should be the same among all raster 7zip archives.
+flowaccum_raster <- file.path(raster_dir, "fac.tif")
 
-# output filepath for streams raster
-streams_raster <- ""
+d8_raster <- file.path(raster_dir, "fdr.tif")
 
-# Snapping outlet points and checking format ------------------------------
-# Define the shapefile with points to delineate
-outlet_pts <- ""
+# These are names for raster outputs from whitebox tools
+streams_raster <- file.path(raster_dir, "whitebox_streams_raster.tif")
 
-snapped_outlet_points <- ""
+snapped_outlet_points <- file.path(dirname(outlet_pts_path),
+                                   "snapped-outlet-pts.shp")
 
 # Whitebox tools part -----------------------------------------------------
 # TODO REFACTOR THIS PART
+# NHDPlusHR flow directions use ESRI pointer
 # snap pour points to streams raster
 wbt_jenson_snap_pour_points(pour_pts = pour_points,
                             streams = streams_raster,

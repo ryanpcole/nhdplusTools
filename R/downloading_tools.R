@@ -89,8 +89,10 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
         download.file(url, out_file)
         zip::unzip(out_file, exdir = out[length(out)])
         unlink(out_file)
-      } else if(download_files & !dir.exists(paste0(dir_out, "/HRNHDPlusRasters", hu04)) &
+      } else if(download_files &
+                !dir.exists(paste0(dir_out, "/HRNHDPlusRasters", hu04, "_with_fac")) &
                 raster) {
+
         download.file(url, out_file,
                       method = "libcurl",
                       mode = "wb")
@@ -98,7 +100,7 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
         if(.Platform$OS.type == "windows") {
           # RUN 7zip on the out file
           closeAllConnections() # Needed to enforce file not in use
-          exit_status <- shell(shQuote(paste0("7z x -o", dir_out, " ", out_file)),
+          exit_status <- shell(shQuote(paste0("7z x -o -y", dir_out, " ", out_file)),
                                mustWork =  TRUE)
           if(exit_status == 127) {stop("Error - command not run. Exit status 127\n
                                        Check 7zip installed and on PATH")}
@@ -120,6 +122,7 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
       }
     }
   }
+  if(raster) out <- paste0(dir_out, "/HRNHDPlusRasters", hu04, "_with_fac")
   return(out)
 }
 
