@@ -1,0 +1,6 @@
+{
+  "verbose_mode": true,
+  "working_directory": "testdata/raster\\",
+  "compress_rasters": true,
+  "max_procs": -1
+}

@@ -21,7 +21,7 @@ library(whitebox)
 library(sf)
 
 # initiate whitebox tools
-wbt_init()
+whitebox::wbt_version()
 # TODO Can I make this  multicore?
 # wbt_options(max_procs = 16L,
 #             verbose = TRUE)
@@ -54,8 +54,7 @@ outlet_pts_path <- file.path("testdata", "vector", "usgs-gauges-hyunwoo.shp")
 # TODO Reproject outlet_pts to project CRS
 # FIX - why does reprojecting to project CRS give the incorrect huc codes? This
 # looks to be a bug in get_huc
-outlet_pts <- sf::st_read(outlet_pts_path) %>%
-  sf::st_transform(crs = project_crs)
+outlet_pts <- sf::st_read(outlet_pts_path)
 bbox <- sf::st_bbox(outlet_pts) %>%
   sf::st_as_sfc()
 huc_codes <- nhdplusTools::get_huc(AOI = bbox,
@@ -83,8 +82,8 @@ d8_raster <- file.path(raster_dir, "fdr.tif")
 # These are names for raster outputs from whitebox tools
 streams_raster <- file.path(raster_dir, "whitebox_streams_raster.tif")
 
-snapped_outlet_pts <- file.path(dirname(outlet_pts_path),
-                                "snapped-outlet-pts.shp")
+snapped_outlet_pts_path <- file.path(dirname(outlet_pts_path),
+                                     "snapped-outlet-pts.shp")
 
 # Whitebox tools part -----------------------------------------------------
 # TODO REFACTOR THIS PART
@@ -94,18 +93,35 @@ snapped_outlet_pts <- file.path(dirname(outlet_pts_path),
 # First ensure outlet points are in the project CRS. I can't do this above since
 # it seems to mess with get_huc function
 if(sf::st_crs(outlet_pts) != project_crs) {
-  sf::st_write()
+  sf::st_transform(outlet_pts, crs = project_crs) %>%
+    sf::st_write(file.path(snapped_outlet_pts_path))
+} else {
+  sf::st_write(outlet_pts,
+               snapped_outlet_pts_path)
 }
 
-whitebox::wbt_jenson_snap_pour_points(pour_pts = outlet_pts_path,
+# Create a streams raster
+whitebox::wbt_extract_streams(flow_accum = flowaccum_raster,
+                              output = streams_raster,
+                              threshold = stream_thresh,
+                              zero_background = TRUE,
+                              wd = work_dir)
+
+
+# Snap the outlet points to the streams raster
+whitebox::wbt_jenson_snap_pour_points(pour_pts = snapped_outlet_pts_path,
                             streams = streams_raster,
-                            output = snapped_outlet_pts,
+                            output = snapped_outlet_pts_path,
                             snap_dist = pour_pt_snap_distance,
                             verbose_mode = TRUE)
 
+# TODO: Is there a way to visually check the streams raster in R? Can I make this
+# an interactive test? Or could I programatically decide  a streams threshold rather
+# than having the user guess and check?
+
 # re-defining variables for watershed delineation
 # Load the snapped points and make sure they are the correct geometry
-watershed_outlet_points <- sf::st_read(snapped_outlet_points)
+watershed_outlet_points <- sf::st_read(snapped_outlet_pts_path)
 if(any(sf::st_geometry_type(watershed_outlet_points) != "POINT")) {
   stop("Watershed outlet points are not POINT geometries")
 }
@@ -142,13 +158,15 @@ delineate_watersheds <- function(d8_raster,
     # use that temporary outlet point to delineate watershed
     whitebox::wbt_watershed(d8_pntr = d8_raster,
                   pour_pts = working_outlet_point,
-                  output = working_watershed_raster,
-                  wd = work_dir)
-    # Convert that raster to a polygon
+                  output = working_watershed_raster)
+    browser()
+    # Convert that raster to a polygon shapefile
+    if(!dir.exists(file.path(work_dir, "watershed_polygons"))) {
+      dir.create(file.path(work_dir, "waterhsed_polygons"))
+    }
     watershed_polygon <- paste0(work_dir, "/watershed_polygons/", output_polygon_filename)
     whitebox::wbt_raster_to_vector_polygons(input = working_watershed_raster,
-                                  output = watershed_polygon,
-                                  wd = work_dir)
+                                  output = watershed_polygon)
     # Add the CRS to the shapefile. First read in the polygon, then apply CRS, then write
     polygon <- sf::st_read(watershed_polygon)
     sf::st_crs(polygon) <- project_crs
@@ -162,4 +180,7 @@ delineate_watersheds <- function(d8_raster,
 }
 
 # Test the watershed delineation ------------------------------------------
-delineate_watersheds(d)
+delineate_watersheds(d8_raster = d8_raster,
+                     outlet_points = watershed_outlet_points,
+                     output_polygon_prefix = "tester_",
+                     work_dir = "testdata/watershed_polygons")
