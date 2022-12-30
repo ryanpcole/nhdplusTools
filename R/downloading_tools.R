@@ -43,6 +43,7 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
     sapply(x, function(y) any(grepl(y, hu04_list))))
 
   out <- c()
+  ret <- c()
 
   for(h in 1:length(hu02_list)) {
     hu02 <- hu02_list[h]
@@ -76,11 +77,11 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
       file_list <- file_list[grepl("_RASTER.7z", file_list)]
     }
 
-
     if(subset_hu02[h]) {
       file_list <- file_list[sapply(file_list, function(f)
         any(sapply(hu04_list, grepl, x = f)))]
     }
+
 
     for(key in file_list) {
       dir_out <- ifelse(is.null(out[length(out)]), "", out[length(out)])
@@ -90,13 +91,16 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
       hu04 <- regexec("[0-9][0-9][0-9][0-9]", out_file)[[1]]
       hu04 <- substr(out_file, hu04, hu04 + 3)
 
+      print(key)
+
       if(download_files) {
         if(raster) {
           if(any(grepl(paste0("HRNHDPlusRasters", hu04), #Unzipped file exists
                       list.dirs(dir_out, recursive = FALSE)))) {
             # Don't download or extract, only return filepath of outlet
             basenames <- basename(list.dirs(dir_out, recursive = FALSE))
-            out <- c(out,
+            basenames <- basenames[!grepl(".gdb", basenames)]
+            ret <- c(ret,
                      list.dirs(dir_out, recursive = FALSE)[grep(hu04, basenames)])
 
           } else {
@@ -130,7 +134,8 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
             unlink(out_file)
             # Add extracted directories to out
             basenames <- basename(list.dirs(dir_out, recursive = FALSE))
-            out <- c(out,
+            basenames <- basenames[!grepl(".gdb", basenames)]
+            ret <- c(ret,
                      list.dirs(dir_out, recursive = FALSE)[grep(hu04, basenames)])
 
           }
@@ -144,15 +149,17 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
             download.file(url, out_file)
             zip::unzip(out_file, exdir = out[length(out)])
             unlink(out_file)
+            ret <- c(ret,
+                     out)
           }
         }
       } else {
-          out <- c(out, url)
+          ret <- c(ret, url)
         }
     }
   }
     # TODO out should be vector of paths if multiple rasters were downloaded
-    return(out)
+    return(ret)
 }
 
 #' @title Download seamless National Hydrography Dataset Version 2 (NHDPlusV2)
