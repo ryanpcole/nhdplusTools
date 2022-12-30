@@ -13,9 +13,12 @@ test_dir <- "testdata/raster"
 # huc <- "1708" # 1.4 GB extracts
 # huc <- "0302" # 1.8 GB extracts
 # huc <- "0420" # 2.0 GB # WORKS ON ALL PLATFORMS (archive_extract)
-huc <- "0510" # 2.2 GB # FAILS ON ALL PLATFORMS (archive_extract)
+# huc <- "0510" # 2.2 GB # FAILS ON ALL PLATFORMS (archive_extract)
 # huc <- "0514" # 2.4 GB # WORKS ON LINUX USING 7z shell command
 # huc <- "1021" # 2.7 GB
+
+# huc <- "1709" # This has _with_fac at end of dir
+huc <- "1708" # basic dir name
 
 # load raster data from that huc
 test_raster <- download_nhdplushr(test_dir, huc, download_files = TRUE,

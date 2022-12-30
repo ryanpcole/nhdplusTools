@@ -27,6 +27,13 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
   # Check for 7z if raster == TRUE
   if(raster) check7z()
 
+  # TODO: Could probably refactor the entire if_else block since each block
+  # relies on so many conditions. Could first split based on download, then raster,
+  # any dirs exist. This would probably make returning the out path as a URL or filepath
+  # much simpler to comprehend and debug.
+  # Alternatively I could just add two blocks that are opposite of file exists but
+  # same as the other logical values
+
   nhdhr_bucket <- get("nhdhr_bucket", envir = nhdplusTools_env)
   nhdhr_file_list <- get("nhdhr_file_list", envir = nhdplusTools_env)
 
@@ -83,50 +90,69 @@ download_nhdplushr <- function(nhd_dir, hu_list, download_files = TRUE,
       hu04 <- regexec("[0-9][0-9][0-9][0-9]", out_file)[[1]]
       hu04 <- substr(out_file, hu04, hu04 + 3)
 
-      if(download_files & !dir.exists(gsub(".zip", ".gdb", out_file)) &
-         !dir.exists(file.path(dirname(out_file), paste0(hu04, ".gdb"))) &
-         !raster) {
-        download.file(url, out_file)
-        zip::unzip(out_file, exdir = out[length(out)])
-        unlink(out_file)
-      } else if(download_files &
-                !dir.exists(paste0(dir_out, "/HRNHDPlusRasters", hu04)) &
-                raster) {
+      if(download_files) {
+        if(raster) {
+          if(any(grepl(paste0("HRNHDPlusRasters", hu04), #Unzipped file exists
+                      list.dirs(dir_out, recursive = FALSE)))) {
+            # Don't download or extract, only return filepath of outlet
+            basenames <- basename(list.dirs(dir_out, recursive = FALSE))
+            out <- c(out,
+                     list.dirs(dir_out, recursive = FALSE)[grep(hu04, basenames)])
 
-        # TODO: Make sure it checks for zipped and unzipped files
-
-        download.file(url, out_file,
-                      method = "libcurl",
-                      mode = "wb")
-        # WINDOWS CMD SHELL
-        if(.Platform$OS.type == "windows") {
-          # RUN 7zip on the out file
-          closeAllConnections() # Needed to enforce file not in use
-          exit_status <- shell(shQuote(paste0("7z x -y -o", dir_out, " ", out_file)),
-                               mustWork =  TRUE)
-          if(exit_status == 127) {stop("Error - command not run. Exit status 127\n
+          } else {
+            if(!file.exists(out_file)) {
+              # Download file
+              download.file(url, out_file,
+                            method = "libcurl",
+                            mode = "wb")
+            }
+            # Extract file
+            # WINDOWS CMD SHELL
+            if(.Platform$OS.type == "windows") {
+              # RUN 7zip on the out file
+              closeAllConnections() # Needed to enforce file not in use
+              exit_status <- shell(shQuote(paste0("7z x -y -o", dir_out, " ", out_file)),
+                                   mustWork =  TRUE)
+              if(exit_status == 127) {stop("Error - command not run. Exit status 127\n
                                        Check 7zip installed and on PATH")}
-        }
+            }
 
-        # LINUX WORKAROUND - call 7zip from shell
-        if(.Platform$OS.type == "linux") {
-          exit_status <- system2("7z", args = c(paste0("x -y -o",
-                                        dir_out),
-                        out_file),
-                  invisible = FALSE)
-          if(exit_status == 127) {stop("Error - command not run. Exit status 127\n
+            # LINUX WORKAROUND - call 7zip from shell
+            if(.Platform$OS.type == "linux") {
+              exit_status <- system2("7z", args = c(paste0("x -y -o",
+                                                           dir_out),
+                                                    out_file),
+                                     invisible = FALSE)
+              if(exit_status == 127) {stop("Error - command not run. Exit status 127\n
                                        Check 7zip installed and on PATH")}
-        }
+            }
 
-        unlink(out_file)
-      } else if(!download_files) {
-        out <- c(out, url)
-      }
+            unlink(out_file)
+            # Add extracted directories to out
+            basenames <- basename(list.dirs(dir_out, recursive = FALSE))
+            out <- c(out,
+                     list.dirs(dir_out, recursive = FALSE)[grep(hu04, basenames)])
+
+          }
+
+
+        } else {
+          # Vector file code:
+          if(!dir.exists(gsub(".zip", ".gdb", out_file)) &
+             !dir.exists(file.path(dirname(out_file), paste0(hu04, ".gdb")))) {
+            # Download and unzip vector files
+            download.file(url, out_file)
+            zip::unzip(out_file, exdir = out[length(out)])
+            unlink(out_file)
+          }
+        }
+      } else {
+          out <- c(out, url)
+        }
     }
   }
-  # TODO out should be vector of paths if multiple rasters were downloaded
-  if(raster) out <- paste0(dir_out, "/HRNHDPlusRasters", hu04)
-  return(out)
+    # TODO out should be vector of paths if multiple rasters were downloaded
+    return(out)
 }
 
 #' @title Download seamless National Hydrography Dataset Version 2 (NHDPlusV2)
