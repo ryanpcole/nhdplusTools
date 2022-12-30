@@ -26,9 +26,10 @@ wbt_init()
 # wbt_options(max_procs = 16L,
 #             verbose = TRUE)
 
-# use this project CRS if using NHDPlusHR rasters
-# TODO DO all NHDPlusHR rasters use this CRS?
+# use this project CRS if using NHDPlusHR rasters from Lower 48
 project_crs <- "ESRI:102039"
+# TODO Other projections available for other states/territories defined in
+# NHDPlusHR manual. Need to add support for other CRS later
 
 
 # INPUTS ------------------------------------------------------------------
@@ -50,24 +51,24 @@ stream_thresh <- 7000
 outlet_pts_path <- file.path("testdata", "vector", "usgs-gauges-hyunwoo.shp")
 
 # Downloading flow accumulation raster ------------------------------------
-# TODO Get HUC4 from outlet points
-outlet_pts <- sf::st_read(outlet_pts_path)
+# TODO Reproject outlet_pts to project CRS
+# FIX - why does reprojecting to project CRS give the incorrect huc codes? This
+# looks to be a bug in get_huc
+outlet_pts <- sf::st_read(outlet_pts_path) %>%
+  sf::st_transform(crs = project_crs)
 bbox <- sf::st_bbox(outlet_pts) %>%
   sf::st_as_sfc()
-
 huc_codes <- nhdplusTools::get_huc(AOI = bbox,
                                    t_srs = project_crs,
                                    type = "huc04") # Only option for raster DL
-
 huc <- huc_codes$huc4
-
-
 # download the rasters.
 # This should avoid download if the rasters already exist in work_dir
-raster_dir <- download_nhdplushr(work_dir, huc, download_files = TRUE,
-                                  raster = TRUE)
-
-
+# TODO Needs to handle multiple rasters
+raster_dir <- nhdplusTools::download_nhdplushr(work_dir,
+                                               huc,
+                                               download_files = TRUE,
+                                               raster = TRUE)
 
 # Define paths for raster processing --------------------------------------
 # TODO Figure out how to use temp files for raster processing
@@ -82,30 +83,41 @@ d8_raster <- file.path(raster_dir, "fdr.tif")
 # These are names for raster outputs from whitebox tools
 streams_raster <- file.path(raster_dir, "whitebox_streams_raster.tif")
 
-snapped_outlet_points <- file.path(dirname(outlet_pts_path),
-                                   "snapped-outlet-pts.shp")
+snapped_outlet_pts <- file.path(dirname(outlet_pts_path),
+                                "snapped-outlet-pts.shp")
 
 # Whitebox tools part -----------------------------------------------------
 # TODO REFACTOR THIS PART
 # NHDPlusHR flow directions use ESRI pointer
 # snap pour points to streams raster
-wbt_jenson_snap_pour_points(pour_pts = pour_points,
+
+# First ensure outlet points are in the project CRS. I can't do this above since
+# it seems to mess with get_huc function
+if(sf::st_crs(outlet_pts) != project_crs) {
+  sf::st_write()
+}
+
+whitebox::wbt_jenson_snap_pour_points(pour_pts = outlet_pts_path,
                             streams = streams_raster,
-                            output = snapped_outlet_points,
+                            output = snapped_outlet_pts,
                             snap_dist = pour_pt_snap_distance,
                             verbose_mode = TRUE)
 
-# Defining variables for watershed delineation
-# TODO
-outlet_points <- st_read(snapped_outlet_points) %>%
-  mutate(FID = seq_len(nrow(.)))
+# re-defining variables for watershed delineation
+# Load the snapped points and make sure they are the correct geometry
+watershed_outlet_points <- sf::st_read(snapped_outlet_points)
+if(any(sf::st_geometry_type(watershed_outlet_points) != "POINT")) {
+  stop("Watershed outlet points are not POINT geometries")
+}
 
 # Function to delineate watersheds from d8_raster and snapped outlet points
-watershed_delineation <- function(d8_raster,
-                                  outlet_points,
-                                  output_polygon_prefix,
-                                  work_dir) {
+delineate_watersheds <- function(d8_raster,
+                                 outlet_points,
+                                 output_polygon_prefix,
+                                 work_dir) {
 
+  # Define working temporary filenames
+  # TODO: can I do this with tempfiles?
   working_outlet_point <-     "temp_outlet_point.shp"
   working_watershed_raster <- "watershed_raster_inprogress.tif"
 
@@ -128,19 +140,19 @@ watershed_delineation <- function(d8_raster,
              file.path(work_dir, working_outlet_point),
              append = FALSE)
     # use that temporary outlet point to delineate watershed
-    wbt_watershed(d8_pntr = d8_raster,
+    whitebox::wbt_watershed(d8_pntr = d8_raster,
                   pour_pts = working_outlet_point,
                   output = working_watershed_raster,
                   wd = work_dir)
     # Convert that raster to a polygon
     watershed_polygon <- paste0(work_dir, "/watershed_polygons/", output_polygon_filename)
-    wbt_raster_to_vector_polygons(input = working_watershed_raster,
+    whitebox::wbt_raster_to_vector_polygons(input = working_watershed_raster,
                                   output = watershed_polygon,
                                   wd = work_dir)
     # Add the CRS to the shapefile. First read in the polygon, then apply CRS, then write
-    polygon <- st_read(watershed_polygon)
-    st_crs(polygon) <- project_crs
-    st_write(polygon,
+    polygon <- sf::st_read(watershed_polygon)
+    sf::st_crs(polygon) <- project_crs
+    sf::st_write(polygon,
              watershed_polygon,
              append = FALSE)
 
@@ -149,3 +161,5 @@ watershed_delineation <- function(d8_raster,
   }
 }
 
+# Test the watershed delineation ------------------------------------------
+delineate_watersheds(d)
