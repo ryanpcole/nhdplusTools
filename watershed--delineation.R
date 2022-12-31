@@ -14,6 +14,8 @@
 # Make sure the vector and raster files are all in the correct projection
 # before running this script
 
+# TODO: Add ability to process points across multiple HUC04s
+
 # Load nhdplusTools package
 devtools::load_all()
 
@@ -35,7 +37,7 @@ project_crs <- "ESRI:102039"
 # INPUTS ------------------------------------------------------------------
 
 # Working directory - where would you like to download rasters and export files
-work_dir <- file.path("testdata", "raster")
+raster_dl_dir <- file.path("testdata", "raster")
 
 # Constants - Needed for whitebox tools
 # you might have to play around with these to get good results
@@ -63,8 +65,7 @@ huc_codes <- nhdplusTools::get_huc(AOI = bbox,
 huc <- huc_codes$huc4
 # download the rasters.
 # This should avoid download if the rasters already exist in work_dir
-# TODO Needs to handle multiple rasters
-raster_dir <- nhdplusTools::download_nhdplushr(work_dir,
+raster_dir <- nhdplusTools::download_nhdplushr(raster_dl_dir,
                                                huc,
                                                download_files = TRUE,
                                                raster = TRUE)
@@ -94,10 +95,12 @@ snapped_outlet_pts_path <- file.path(dirname(outlet_pts_path),
 # it seems to mess with get_huc function
 if(sf::st_crs(outlet_pts) != project_crs) {
   sf::st_transform(outlet_pts, crs = project_crs) %>%
-    sf::st_write(file.path(snapped_outlet_pts_path))
+    sf::st_write(snapped_outlet_pts_path,
+                 append = FALSE)
 } else {
   sf::st_write(outlet_pts,
-               snapped_outlet_pts_path)
+               snapped_outlet_pts_path,
+               append = FALSE)
 }
 
 # Create a streams raster
@@ -105,7 +108,7 @@ whitebox::wbt_extract_streams(flow_accum = flowaccum_raster,
                               output = streams_raster,
                               threshold = stream_thresh,
                               zero_background = TRUE,
-                              wd = work_dir)
+                              wd = raster_dl_dir)
 
 
 # Snap the outlet points to the streams raster
@@ -127,6 +130,8 @@ if(any(sf::st_geometry_type(watershed_outlet_points) != "POINT")) {
 }
 
 # Function to delineate watersheds from d8_raster and snapped outlet points
+# TODO - check if there are multiple huc4s, split apart points by huc4 raster, and
+# loop through the watershed delineation for each raster
 delineate_watersheds <- function(d8_raster,
                                  outlet_points,
                                  output_polygon_prefix,
@@ -158,15 +163,17 @@ delineate_watersheds <- function(d8_raster,
     # use that temporary outlet point to delineate watershed
     whitebox::wbt_watershed(d8_pntr = d8_raster,
                   pour_pts = working_outlet_point,
-                  output = working_watershed_raster)
-    browser()
+                  output = working_watershed_raster,
+                  wd = work_dir,
+                  esri_pntr = TRUE)
     # Convert that raster to a polygon shapefile
     if(!dir.exists(file.path(work_dir, "watershed_polygons"))) {
-      dir.create(file.path(work_dir, "waterhsed_polygons"))
+      dir.create(file.path(work_dir, "watershed_polygons"))
     }
     watershed_polygon <- paste0(work_dir, "/watershed_polygons/", output_polygon_filename)
     whitebox::wbt_raster_to_vector_polygons(input = working_watershed_raster,
-                                  output = watershed_polygon)
+                                            output = watershed_polygon,
+                                            wd = work_dir)
     # Add the CRS to the shapefile. First read in the polygon, then apply CRS, then write
     polygon <- sf::st_read(watershed_polygon)
     sf::st_crs(polygon) <- project_crs
@@ -177,10 +184,54 @@ delineate_watersheds <- function(d8_raster,
     # Complete!
     print(paste0("Finished watershed delineation ---- ", i, "/", nrow(outlet_points)))
   }
+  # Clean up temporary working files
+  file.remove(list.files(path = work_dir,
+                         full.names = TRUE))
 }
 
 # Test the watershed delineation ------------------------------------------
 delineate_watersheds(d8_raster = d8_raster,
                      outlet_points = watershed_outlet_points,
                      output_polygon_prefix = "tester_",
-                     work_dir = "testdata/watershed_polygons")
+                     work_dir = "testdata/whitebox")
+
+# Combine into gpkg -------------------------------------------------------
+# TODO - make this work for generic watersheds
+read_polygons <- function(watershed_dir) {
+  basin_polygons_files <- list.files(file.path(watershed_dir,
+                                               "watershed_polygons"),
+                                     pattern = ".shp",
+                                     full.names = TRUE)
+  # Put them in a dataframe
+  basin_polygons <- data.frame()
+  crs <- c()
+  for (i in seq_along(basin_polygons_files)) {
+    # get the filename
+    name <- basename(basin_polygons_files[i])
+    # Read file and add it to data.frame
+    shapefile <- sf::st_read(basin_polygons_files[i])
+    geometry <- sf::st_geometry(shapefile)
+    sf <- sf::st_sf("FID" = i,
+                    "name" = name,
+                    "geometry" = geometry)
+    basin_polygons <- rbind(basin_polygons,
+                            sf)
+    # check the CRS
+    crs[i] <- sf::st_crs(shapefile)[1]
+    if (is.na(crs[i])) stop("CRS is NA")
+    if (length(unique(crs)) > 1) {
+      stop(paste0("CRS of ", name, " is different than other files."))
+    }
+  }
+  return(basin_polygons)
+}
+
+watershed_dir <- "testdata/whitebox"
+basin_polygons <- read_polygons(watershed_dir)
+
+# Write to geopackage
+sf::st_write(basin_polygons,
+             file.path(watershed_dir, "output.gpkg"),
+             delete_dsn = TRUE)
+
+
