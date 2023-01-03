@@ -71,7 +71,12 @@ raster_dir <- nhdplusTools::download_nhdplushr(raster_dl_dir,
                                                raster = TRUE)
 
 # Define paths for raster processing --------------------------------------
-# TODO Figure out how to use temp files for raster processing
+# TODO: Add option to fill single cell pits in d8 raster, then calculate flow
+# accumulation and streams for that filled raster. There are lots of streams that
+# go subsurface in the McKenzie (and probably other) basins, so this might fix
+# some of those issues with enforced subsurface streams. Which tool should I use?
+# Options: fillsinglecellpits, breachdepressionsleastcost, breachsinglecellpits
+
 
 # Get the filepath for the flow accumulation raster and d8 raster from work dir.
 # These should all be standardized names so use work_dir, subfolder path, and the
