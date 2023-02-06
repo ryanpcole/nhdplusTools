@@ -15,6 +15,11 @@
 # before running this script
 
 # TODO: Add ability to process points across multiple HUC04s
+# TODO: Add functionality to delineate watersheds using NHD flowline and catchment
+#       data - this may be slower but it wouldn't involve downloading rasters or
+#       whitebox tools dependencies. I probably could do this in another file and
+#       write a wrapper function so user can choose raster or vector methods
+
 
 # Load nhdplusTools package
 devtools::load_all()
