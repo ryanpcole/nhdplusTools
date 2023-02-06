@@ -6,29 +6,42 @@
 # US and merge polygons instead of doing a DEM delineation. That way it's closer
 # to the data provided by ODEQ.
 
-# TODO: Add some of these functions to my fork of nhdplusTools
-# TODO: maybe I could get the catchment without accessing the webservice from
-# get_nhdplushr with the catchment data includeded. I could get all the comids
-# and union the polygons for those comids as the catchment area
-
 
 # Libraries
 library(sf)
 library(dplyr)
-library(nhdplusTools)
+devtools::load_all()
 library(purrr)
 library(progress)
 
 # Project CRS
 proj_crs <- "epsg:4326"
 
-# Import data -------------------------------------------------------------
-# DWSA Polygons
+# Input data -------------------------------------------------------------
+# Here will go some option to input data for watershed delineation process.
+# I want to have a couple of input options:
+# 1. Points - the user can input a vector of points (must be on the streamline)
+#    to delineate the upstream area. I will probably need to find or create a
+#    helper function to snap points on the streams
+# 2. COMIDS - if the user already knows the comid/reach id/ etc. of the stream
+#    segment they want, they could input that.
+#    TODO: look at the data model to see which unique identifier would be best used here
+# 3. Polygon - user could give a polygon, this is what I used to improve the polygons
+#    for OR drinking water source areas. However, this is probably a bad idea for
+#    general use since any arbitrary polygon will likely cross multiple streamlines
+#    and watershed boundaries. I should probably remove this functionality from
+#    general purpose code
+# Polygons
 polygons <- st_read("data/geospatial/surface-drinking-water-sources/shapefiles/OR_drinking_water_source_areas.shp") %>%
   mutate(huc4 = substr(SUBBASIN, 1, 4)) %>%
   st_cast("POLYGON") %>%
   mutate(og_polygon_area = as.numeric(st_area(geometry))) %>%
   filter(og_polygon_area > 100)
+
+# POINTS - This is probably better, but how do I snap to flowlines?
+
+
+# COMIDs
 
 # NHD Flowlines - Hires version (only downloads if nhdplushr data hasn't already been downloaded)
 hr_dir <- file.path("data",
@@ -38,6 +51,11 @@ hr_dir <- file.path("data",
 download_nhdplushr(hr_dir, polygons$huc4)
 
 # FUNCTIONS ---------------------------------------------------------------
+# TODO: Give the user multiple options to delineate watersheds:
+# option 1 - use NHDPlusHR catchments
+# option 2 - use the USGS get_split_catchment webservice
+# TODO: give the user the option to use nhdplusv2 or nhudplushr
+
 
 # Run the algorithm in chunks by huc4 if using nhdplushr dataset
 # Borrowed this from smoothr package - https://github.com/mstrimas/smoothr/blob/main/R/fill-holes.r
