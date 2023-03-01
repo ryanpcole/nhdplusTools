@@ -164,8 +164,8 @@ get_upstream_catchment_from_nhdplushr <- function(points,
     Sys.sleep(0.01)
   }
   basin_geometries <- do.call(rbind, basin_geometries) %>%
-    sf::st_as_sfc() %>%
-    sf::st_set_crs(4326)
+    sf::st_sfc(crs = proj_crs) %>%
+    st_make_valid()
 
   return(basin_geometries)
 }
@@ -235,9 +235,10 @@ get_watershed_by_huc <- function(points_same_huc,
   })
   cat("\nCatchment delineation complete! Time elapsed \n")
 
-  browser()
+  # Put the catchment geometry list column in the points dataset
+  sf::st_geometry(snapped_pts) <- catchment_geometries
 
-  return(catchment_geometries)
+  return(snapped_pts)
 }
 
 
@@ -255,7 +256,7 @@ delineate_watersheds <- function(points,
     arrange(huc4) %>%
     split(.$huc4)
 
-  # Get the source watershed for each polygon, but split up by huc4 for speed
+  # Get the source watershed for each point, but split up by huc4 for speed
   catchments <- lapply(split_points_by_huc4,
                        get_watershed_by_huc,
                        nhdplusdir = nhdplusdir)
