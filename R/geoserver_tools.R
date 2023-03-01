@@ -232,7 +232,7 @@ unify_types <- function(out) {
 assign("bb_break_size", value = 2, nhdplusTools_env)
 
 #' @title Construct a BBOX spatial filter for geoservers
-#' @description From an 'area of intferest' object (sf POINT or POLYGON),
+#' @description From an 'area of interest' object (sf POINT or POLYGON),
 #' generate a WMS BBOX filter to pass to a geoserver.
 #' @inheritParams get_nhdplus
 #' @param type needed if we want to use CQL, not for BBOX. Left for posterity

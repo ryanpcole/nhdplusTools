@@ -21,11 +21,11 @@ devtools::load_all()
 proj_crs <- "epsg:4326"
 
 # Path to input points file
-pts_input_file <- ""
+pts_input_file <- "testdata/vector/snapped-outlet-pts.shp"
 
 # Directory to store nhdplusHR files
-hr_dir <- file.path("data",
-                    "geospatial",
+hr_dir <- file.path("testdata",
+                    "vector",
                     "NHDPlusHR")
 
 
@@ -38,12 +38,6 @@ hr_dir <- file.path("data",
 # 2. COMIDS - if the user already knows the comid/reach id/ etc. of the stream
 #    segment they want, they could input that.
 #    TODO: look at the data model to see which unique identifier would be best used here
-# 3. Polygon - user could give a polygon, this is what I used to improve the polygons
-#    for OR drinking water source areas. However, this is probably a bad idea for
-#    general use since any arbitrary polygon will likely cross multiple streamlines
-#    and watershed boundaries. I should probably remove this functionality from
-#    general purpose code
-# Polygons
 
 # POINTS - This is probably better, but how do I snap to flowlines?
 # If shapefile
@@ -57,10 +51,16 @@ input_pts <- sf::st_read(pts_input_file) %>%
 
 # NHD Flowlines - Hires version (only downloads if nhdplushr data hasn't already been downloaded)
 # Download all the NHDPlusHR flowline data for those hucs
-huc4 <- get_huc(AOI = input_pts,
+aoi <- sf::st_as_sfc(sf::st_bbox(input_pts))
+
+huc4 <- get_huc(aoi,
                 t_srs = proj_crs,
-                type = "huc04")
-download_nhdplushr(hr_dir, huc4)
+                type = "huc04")$huc4
+
+input_pts$huc4 <- huc4
+
+
+download_nhdplushr(hr_dir, unique(huc4))
 
 # FUNCTIONS ---------------------------------------------------------------
 # TODO: Give the user multiple options to delineate watersheds:
@@ -109,7 +109,23 @@ fill_all_holes.sfc <- function(x) {
   sf::st_sfc(x)
 }
 
-# TODO Function to snap points to stream system
+# TODO Function to get nearest COMID and all upstream
+get_upstream_flowlines <- function(points,
+                                   flowlines) {
+  nearest_flowlines_idx <- sf::st_nearest_feature(points,
+                                                        flowlines)
+  nearest_flowlines <- flowlines[nearest_flowlines_idx,]
+  upstream_comids <- lapply(nearest_flowlines$COMID,
+                            get_UT,
+                            network = flowlines)
+
+  points$n_upstream_flowlines <- lengths(upstream_comids)
+  points$us_comids <- upstream_comids
+
+  return(points)
+
+}
+
 
 # Use nhdplus catchments for each flowline and union them together - this might
 # take a while but will likely result in better catchments than from the USGS
@@ -123,30 +139,35 @@ get_upstream_catchment_from_nhdplushr <- function(points,
                              length = nrow(points))
   pb <- progress_bar$new(total = nrow(points))
   pb$tick(0)
+
+  cat("\n")
+
   for(i in seq_len(nrow(points))) {
     cat("Delineating catchment ", i, " / ", nrow(points), "\r")
     # Use the COMIDs to identify all the upstream flowlines
     comids <- sort(points$us_comids[[i]])
-    flowlines_sub <- filter(flowlines,
+    flowlines_sub <- dplyr::filter(flowlines,
                             COMID %in% comids)
     # flowline COMIDs are the same as catchment FEATUREIDs
-    catchments_sub <- filter(catchments,
-                             FEATUREID %in% comids) %>%
+    catchments_sub <- dplyr::filter(catchments,
+                                    FEATUREID %in% comids) %>%
       st_make_valid()
     # May need to simplify first to speed things up
     # it might be faster to break the polygons into lines, union them, and then
     # rebuild the boudary polygon rather than unioning all the plygons together
-    catchment_polygon <- st_union(catchments_sub,
-                                  is_coverage = TRUE)
+    catchment_polygon <- sf::st_union(catchments_sub,
+                                      is_coverage = TRUE)
 
-    basin_geometries[[i]] <- st_geometry(catchment_polygon)
+    basin_geometries[[i]] <- sf::st_geometry(catchment_polygon)
 
     pb$tick()
     Sys.sleep(0.01)
   }
   basin_geometries <- do.call(rbind, basin_geometries) %>%
-    st_as_sfc() %>%
-    st_set_crs(4326)
+    sf::st_as_sfc() %>%
+    sf::st_set_crs(4326)
+
+  return(basin_geometries)
 }
 
 
@@ -181,7 +202,7 @@ get_watershed_by_huc <- function(points_same_huc,
   huc4 <- unique(points_same_huc$huc4)
   if(length(huc4) != 1) stop("ERROR: More than one huc4 (or zero)")
 
-  cat("----- Start watershedding for HUC ", huc4,  "(", nrow(points_same_huc), " polygons) -----\n")
+  cat("----- Start watershedding for HUC ", huc4,  "(", nrow(points_same_huc), " points) -----\n")
 
   # THIS BIT SHOULD BE COMMON TO ALL POLYGONS IN A HUC4 FOR SPEED --------
   # Next pull in the nhdplushr flowlines for that polygon's huc
@@ -195,7 +216,7 @@ get_watershed_by_huc <- function(points_same_huc,
                                pattern = paste0("NHDPLUS_H_",
                                                 huc4,
                                                 "_HU4_GDB.gdb"),
-                               layers = c("NHDPlusFlowlines",
+                               layers = c("NHDFlowline",
                                           "NHDPlusCatchment"),
                                proj = proj_crs) # Turns into sf object
     flowlines <- nhdhrdata[[1]]
@@ -203,17 +224,18 @@ get_watershed_by_huc <- function(points_same_huc,
   })
   cat("Time getting NHDPlusHR data ", t_getting["elapsed"], " sec\n")
 
-  # TODO Snap the points to the flowlines
-
-
+  # TODO Get all the starting COMIDS after snapping points
+  snapped_pts <- get_upstream_flowlines(points_same_huc,
+                                        flowlines)
   # Get the catchments for those points
   t_delineating <- system.time({
-    catchment_geometries <- get_upstream_catchment_from_nhdplushr(snapped_points,
+    catchment_geometries <- get_upstream_catchment_from_nhdplushr(snapped_pts,
                                                                   flowlines = flowlines,
                                                                   catchments = nhdcatchments)
   })
   cat("\nCatchment delineation complete! Time elapsed \n")
 
+  browser()
 
   return(catchment_geometries)
 }
@@ -225,12 +247,12 @@ delineate_watersheds <- function(points,
                                  nhdplusdir,
                                  crs = proj_crs) {
 
-  # Make sure points are a shapefile
-  stopifnot(class(points) == "sfc")
+  # Make sure points are all of geometry type POINT
+  stopifnot(sf::st_is(points, "POINT"))
 
   # Split polygons into huc4 groups list
   split_points_by_huc4 <- points %>%
-    arrange(huc4, TINWSF_IS) %>%
+    arrange(huc4) %>%
     split(.$huc4)
 
   # Get the source watershed for each polygon, but split up by huc4 for speed
@@ -238,6 +260,7 @@ delineate_watersheds <- function(points,
                        get_watershed_by_huc,
                        nhdplusdir = nhdplusdir)
 
+  browser()
   # Figure out how to bind them together and return
   output_catchments <- do.call(rbind, catchments) %>%
     st_make_valid()
@@ -247,7 +270,7 @@ delineate_watersheds <- function(points,
 
 # RUN THE MAIN FUNCTION ---------------------------------------------------
 # This runs for a REALLY LONG TIME if using the nhdplushr catchment polygons
-# delineated_watersheds <- correct_source_watersheds(polygons,
-#                                                    hr_dir,
-#                                                    crs = proj_crs)
+delineated_watersheds <- delineate_watersheds(input_pts,
+                                              hr_dir,
+                                              crs = proj_crs)
 
