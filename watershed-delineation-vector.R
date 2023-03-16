@@ -7,10 +7,9 @@
 # to the data provided by ODEQ.
 
 
-# Libraries
+# Libraries - make sure these are in the NAMESPACE file using roxygen
 library(sf)
 library(dplyr)
-library(purrr)
 library(progress)
 devtools::load_all()
 

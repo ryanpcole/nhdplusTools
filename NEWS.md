@@ -1,3 +1,9 @@
+nhdplusTools 0.6.3
+==================
+Updated to contain functions used by FEWS Lab @ OSU
+
+- Users can now delineate watersheds using nhdplusHR data instead of webservice
+
 nhdplusTools 0.6.1
 ==========
 No functional changes. Package migrated to new repository: https://github.com/DOI-USGS/nhdplusTools
