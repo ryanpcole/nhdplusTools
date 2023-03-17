@@ -5,6 +5,7 @@
 #' and four digit codes.
 #' @param download_files boolean if FALSE, only URLs to files will be returned
 #' can be hu02s and/or hu04s
+#' @param raster boolean if TRUE, DEM raster files are downloaded instead of GDB
 #'
 #' @return character Paths to geodatabases created.
 #' @importFrom xml2 read_xml xml_ns_strip xml_find_all xml_text

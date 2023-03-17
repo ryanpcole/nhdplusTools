@@ -4,7 +4,7 @@
 \alias{get_watershed_by_huc}
 \title{get_watershed_by_huc}
 \usage{
-get_watershed_by_huc(points_same_huc, nhdplusdir)
+get_watershed_by_huc(points_same_huc, nhdplusdir, crs = crs)
 }
 \arguments{
 \item{points_same_huc}{an sf object of type POINT or MULTIPOINT containing the the locations
@@ -12,6 +12,8 @@ of desired catchment outlets. These should all be from the same huc4 (scale of
 nhdplushr data download)}
 
 \item{nhdplusdir}{directory location of nhdplushr data downloads}
+
+\item{crs}{the coordinate reference system for geoprocessing. Defaults to epsg:4326}
 }
 \value{
 catchments for all the points within a huc4

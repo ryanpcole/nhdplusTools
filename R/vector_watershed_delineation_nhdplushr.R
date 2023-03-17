@@ -70,8 +70,10 @@ get_upstream_flowlines <- function(points,
 #'               of desired catchment outlets
 #' @param flowlines an sf object containing nhdplushr flowlines
 #' @param catchments an sf object conatining catchment geometries for each nhdplushr flowline
+#' @param crs the coordinate reference system for geoprocessing. Defaults to epsg:4326
 #'
 #' @return an sfc object of catchment geometries for each point
+#'
 #'
 #' @description Use nhdplus catchments for each flowline and union them together - this might
 #' take a while but will likely result in better catchments than from the USGS
@@ -81,7 +83,8 @@ get_upstream_flowlines <- function(points,
 
 get_upstream_catchment_from_nhdplushr <- function(points,
                                                   flowlines,
-                                                  catchments) {
+                                                  catchments,
+                                                  crs = crs) {
   basin_geometries <- vector(mode = "list",
                              length = nrow(points))
   pb <- progress::progress_bar$new(total = nrow(points))
@@ -98,7 +101,7 @@ get_upstream_catchment_from_nhdplushr <- function(points,
     # flowline COMIDs are the same as catchment FEATUREIDs
     catchments_sub <- dplyr::filter(catchments,
                                     FEATUREID %in% comids) %>%
-      st_make_valid()
+      sf::st_make_valid()
     # May need to simplify first to speed things up
     # it might be faster to break the polygons into lines, union them, and then
     # rebuild the boudary polygon rather than unioning all the plygons together
@@ -112,7 +115,7 @@ get_upstream_catchment_from_nhdplushr <- function(points,
   }
   basin_geometries <- do.call(rbind, basin_geometries) %>%
     sf::st_sfc(crs = crs) %>%
-    st_make_valid()
+    sf::st_make_valid()
 
   return(basin_geometries)
 }
@@ -159,6 +162,7 @@ get_split_catchments <- function(points) {
 #'               nhdplushr data download)
 #'
 #' @param nhdplusdir directory location of nhdplushr data downloads
+#' @param crs the coordinate reference system for geoprocessing. Defaults to epsg:4326
 #'
 #' @return catchments for all the points within a huc4
 #'
@@ -200,7 +204,8 @@ get_watershed_by_huc <- function(points_same_huc,
   t_delineating <- system.time({
     catchment_geometries <- get_upstream_catchment_from_nhdplushr(snapped_pts,
                                                                   flowlines = flowlines,
-                                                                  catchments = nhdcatchments)
+                                                                  catchments = nhdcatchments,
+                                                                  crs = crs)
   })
   cat("\nCatchment delineation complete! Time elapsed ",
       t_delineating["elapsed"],
@@ -249,8 +254,8 @@ delineate_watersheds <- function(points,
 
   # Split points into huc4 groups list
   split_points_by_huc4 <- points %>%
-    arrange(huc4) %>%
-    split(.$huc4)
+    arrange(.data$huc4) %>%
+    split(.data$huc4)
 
   # Get the source watershed for each point, but split up by huc4 for speed
   catchments <- lapply(split_points_by_huc4,

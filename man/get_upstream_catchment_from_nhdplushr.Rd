@@ -4,7 +4,7 @@
 \alias{get_upstream_catchment_from_nhdplushr}
 \title{get_upstream_catchment_from_nhdplushr}
 \usage{
-get_upstream_catchment_from_nhdplushr(points, flowlines, catchments)
+get_upstream_catchment_from_nhdplushr(points, flowlines, catchments, crs = crs)
 }
 \arguments{
 \item{points}{an sf object of type POINT or MULTIPOINT containing the the locations
@@ -13,6 +13,8 @@ of desired catchment outlets}
 \item{flowlines}{an sf object containing nhdplushr flowlines}
 
 \item{catchments}{an sf object conatining catchment geometries for each nhdplushr flowline}
+
+\item{crs}{the coordinate reference system for geoprocessing. Defaults to epsg:4326}
 }
 \value{
 an sfc object of catchment geometries for each point

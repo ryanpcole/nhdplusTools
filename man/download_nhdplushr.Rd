@@ -15,6 +15,8 @@ and four digit codes.}
 
 \item{download_files}{boolean if FALSE, only URLs to files will be returned
 can be hu02s and/or hu04s}
+
+\item{raster}{boolean if TRUE, DEM raster files are downloaded instead of GDB}
 }
 \value{
 character Paths to geodatabases created.
