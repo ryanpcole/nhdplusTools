@@ -84,7 +84,7 @@ get_upstream_catchment_from_nhdplushr <- function(points,
                                                   catchments) {
   basin_geometries <- vector(mode = "list",
                              length = nrow(points))
-  pb <- progress_bar$new(total = nrow(points))
+  pb <- progress::progress_bar$new(total = nrow(points))
   pb$tick(0)
 
   cat("\n")
@@ -111,7 +111,7 @@ get_upstream_catchment_from_nhdplushr <- function(points,
     Sys.sleep(0.01)
   }
   basin_geometries <- do.call(rbind, basin_geometries) %>%
-    sf::st_sfc(crs = proj_crs) %>%
+    sf::st_sfc(crs = crs) %>%
     st_make_valid()
 
   return(basin_geometries)
@@ -133,20 +133,20 @@ get_split_catchments <- function(points) {
   # unknown why it doesn't work...
   basin_geometries <- vector(mode = "list",
                              length = nrow(points))
-  pb <- progress_bar$new(total = nrow(points))
+  pb <- progress::progress_bar$new(total = nrow(points))
   pb$tick(0)
   for(i in seq_len(nrow(points))) {
 
     # Do in more steps to allow error handling
     split_catchment <- get_split_catchment(points[i,])[2,] # Second row is sub-catchment
     if(is.null(split_catchment)) split_catchment <- points[i,]
-    basin_geometries[[i]] <- st_geometry(split_catchment)
+    basin_geometries[[i]] <- sf::st_geometry(split_catchment)
     pb$tick()
     Sys.sleep(0.01)
   }
   basin_geometries <- do.call(rbind, basin_geometries) %>%
-    st_as_sfc() %>%
-    st_set_crs(4326) # CRS from result of get_split_catchment
+    sf::st_as_sfc() %>%
+    sf::st_set_crs(4326) # CRS from result of get_split_catchment
   return(basin_geometries)
 }
 
@@ -165,7 +165,8 @@ get_split_catchments <- function(points) {
 #' @description function that takes input of points all in the same HUC4, downloads the
 #' HUC4 flowlines and catchment data from nhdplushr, and outputs catchments.
 get_watershed_by_huc <- function(points_same_huc,
-                                 nhdplusdir) {
+                                 nhdplusdir,
+                                 crs = crs) {
 
   huc4 <- unique(points_same_huc$huc4)
   if(length(huc4) != 1) stop("ERROR: More than one huc4 (or zero)")
@@ -186,7 +187,7 @@ get_watershed_by_huc <- function(points_same_huc,
                                                 "_HU4_GDB.gdb"),
                                layers = c("NHDFlowline",
                                           "NHDPlusCatchment"),
-                               proj = proj_crs) # Turns into sf object
+                               proj = crs) # Turns into sf object
     flowlines <- nhdhrdata[[1]]
     nhdcatchments <- nhdhrdata[[2]]
   })
@@ -258,7 +259,7 @@ delineate_watersheds <- function(points,
 
   # Bind them together and return
   output_catchments <- do.call(rbind, catchments) %>%
-    st_make_valid()
+    sf::st_make_valid()
 
   return(output_catchments)
 }

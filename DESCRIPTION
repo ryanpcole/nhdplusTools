@@ -22,7 +22,7 @@ Authors@R: c(person(given = "David",
             person(given = "Ryan",
                    family = "Cole",
                    role = "ctb",
-                   email = ryan.cole@oregonstate.edu))
+                   email = "ryan.cole@oregonstate.edu"))
 Description: Tools for traversing and working with National Hydrography Dataset Plus (NHDPlus) data. All methods implemented in 'nhdplusTools' are available in the NHDPlus documentation available from the US Environmental Protection Agency <https://www.epa.gov/waterdata/basic-information>.
 URL: https://doi-usgs.github.io/nhdplusTools/ https://github.com/ryanpcole/nhdplusTools/
 BugReports: https://github.com/ryanpcole/nhdplusTools/issues/
@@ -32,7 +32,7 @@ Imports: dplyr, rlang, sf, RANN, units, magrittr, jsonlite, httr, xml2, R.utils,
 Suggests: testthat, knitr, rmarkdown, markdown, ggmap, ggplot2, sp, lwgeom, devtools, codetools, data.table, parallel, s2, gifski, leaflet
 License: CC0
 Encoding: UTF-8
-RoxygenNote: 7.2.2
+RoxygenNote: 7.2.3
 VignetteBuilder: knitr
 Config/testthat/parallel: true
 Config/testthat/edition: 3

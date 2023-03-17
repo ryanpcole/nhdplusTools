@@ -4,7 +4,7 @@
 \alias{download_nhdplushr}
 \title{Download NHDPlus HiRes}
 \usage{
-download_nhdplushr(nhd_dir, hu_list, download_files = TRUE)
+download_nhdplushr(nhd_dir, hu_list, download_files = TRUE, raster = FALSE)
 }
 \arguments{
 \item{nhd_dir}{character directory to save output into}
