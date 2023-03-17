@@ -1,4 +1,4 @@
-Package: nhdplusToolsFEWS
+Package: nhdplusTools
 Type: Package
 Title: NHDPlus Tools - FEWS Lab fork
 Version: 0.6.2
