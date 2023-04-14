@@ -266,6 +266,7 @@ delineate_watersheds <- function(points,
 
   split_points_by_huc4 <- points %>%
     arrange(.data$huc4) %>%
+    group_by(.data$huc4) %>%
     split(.data$huc4)
 
   # Get the source watershed for each point, but split up by huc4 for speed
