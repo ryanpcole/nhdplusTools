@@ -244,7 +244,7 @@ delineate_watersheds <- function(points,
   point_huc4s <- vector(mode = "character", length = nrow(points))
   for(i in seq_len(nrow(points))) {
     point_geom <- st_geometry(points[i,])
-    huc <- get_huc(point_gem)
+    huc <- get_huc(point_geom)
 
     # Let's subset all the hucs to the first 4 digits, then pick the huc4 that
     # appears most in the table
