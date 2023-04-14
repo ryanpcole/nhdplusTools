@@ -50,6 +50,8 @@ get_upstream_flowlines <- function(points,
                                    flowlines) {
   nearest_flowlines_idx <- sf::st_nearest_feature(points,
                                                   flowlines)
+  # TODO: Make this a fuzzier choice about nearest flowline so it doesn't default to
+
   nearest_flowlines <- flowlines[nearest_flowlines_idx,]
   upstream_comids <- lapply(nearest_flowlines$COMID,
                             get_UT,
@@ -111,6 +113,7 @@ get_upstream_catchment_from_nhdplushr <- function(points,
     basin_geometries[[i]] <- sf::st_geometry(catchment_polygon)
 
     pb$tick()
+    cat("\n")
     Sys.sleep(0.01)
   }
   basin_geometries <- do.call(rbind, basin_geometries) %>%
@@ -161,7 +164,7 @@ get_split_catchments <- function(points) {
 #'               of desired catchment outlets. These should all be from the same huc4 (scale of
 #'               nhdplushr data download)
 #'
-#' @param nhdplusdir directory location of nhdplushr data downloads
+#' @param hr_dir directory location of nhdplushr data downloads
 #' @param crs the coordinate reference system for geoprocessing. Defaults to epsg:4326
 #'
 #' @return catchments for all the points within a huc4
@@ -169,8 +172,8 @@ get_split_catchments <- function(points) {
 #' @description function that takes input of points all in the same HUC4, downloads the
 #' HUC4 flowlines and catchment data from nhdplushr, and outputs catchments.
 get_watershed_by_huc <- function(points_same_huc,
-                                 nhdplusdir,
-                                 crs = crs) {
+                                 hr_dir,
+                                 crs) {
 
   huc4 <- unique(points_same_huc$huc4)
   if(length(huc4) != 1) stop("ERROR: More than one huc4 (or zero)")
@@ -183,7 +186,7 @@ get_watershed_by_huc <- function(points_same_huc,
 
   # Timing it
   t_getting <- system.time({
-    gdb_dir <- file.path(nhdplusdir,
+    gdb_dir <- file.path(hr_dir,
                          substr(huc4, 1, 2))
     nhdhrdata <- get_nhdplushr(gdb_dir,
                                pattern = paste0("NHDPLUS_H_",
@@ -224,7 +227,7 @@ get_watershed_by_huc <- function(points_same_huc,
 #'
 #' @param points an sf object of type POINT or MULTIPOINT containing the the locations
 #'               of desired catchment outlets
-#' @param nhdplusdir directory location of nhdplushr data downloads
+#' @param .nhdplusdir directory location of nhdplushr data downloads
 #' @param crs the coordinate reference system for geoprocessing. Defaults to epsg:4326
 #'
 #' @return watershed areas for each point
@@ -232,18 +235,18 @@ get_watershed_by_huc <- function(points_same_huc,
 #'
 #' @description Wrapper function to find the catchments for all the points. Can take
 #' points from multiple HUC4s
-delineate_watersheds <- function(points,
-                                 nhdplusdir,
+delineate_watersheds <- function(pts,
+                                 .nhdplusdir,
                                  crs = "epsg:4326") {
 
   # Make sure points are all of geometry type POINT
-  stopifnot(sf::st_is(points, "POINT"))
+  stopifnot(sf::st_is(pts, "POINT"))
 
   # Check that there is data in the nhdplusdir we want
   # Do it in a for loop
-  point_huc4s <- vector(mode = "character", length = nrow(points))
-  for(i in seq_len(nrow(points))) {
-    point_geom <- st_geometry(points[i,])
+  point_huc4s <- vector(mode = "character", length = nrow(pts))
+  for(i in seq_len(nrow(pts))) {
+    point_geom <- st_geometry(pts[i,])
     huc <- get_huc(point_geom)
 
     # Let's subset all the hucs to the first 4 digits, then pick the huc4 that
@@ -254,7 +257,7 @@ delineate_watersheds <- function(points,
   }
 
   huc4s <- unique(point_huc4s)
-  gdb_dirs <- file.path(nhdplusdir,
+  gdb_dirs <- file.path(.nhdplusdir,
                         substr(huc4s, 1, 2),
                         paste0("NHDPLUS_H_",
                                huc4s,
@@ -262,17 +265,14 @@ delineate_watersheds <- function(points,
   stopifnot("Error: Cannot find GDB of NHDplusHR for all HUC4s. Try downloading using download_nhdplushr" = file.exists(gdb_dirs))
 
   # Split points into huc4 groups list
-  points$huc4 <- point_huc4s
-
-  split_points_by_huc4 <- points %>%
-    arrange(.data$huc4) %>%
-    group_by(.data$huc4) %>%
-    split(.data$huc4)
+  pts$huc4 <- point_huc4s
+  split_points_by_huc4 <- split(pts, pts$huc4)
 
   # Get the source watershed for each point, but split up by huc4 for speed
   catchments <- lapply(split_points_by_huc4,
                        get_watershed_by_huc,
-                       nhdplusdir = nhdplusdir)
+                       .nhdplusdir,
+                       crs)
 
   # Bind them together and return
   output_catchments <- do.call(rbind, catchments) %>%
