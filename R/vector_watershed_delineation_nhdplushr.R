@@ -240,11 +240,20 @@ delineate_watersheds <- function(points,
   stopifnot(sf::st_is(points, "POINT"))
 
   # Check that there is data in the nhdplusdir we want
-  aoi <- sf::st_as_sfc(sf::st_bbox(points))
-  points$huc4 <- get_huc(aoi,
-                         t_srs = crs,
-                         type = "huc04")$huc4
-  huc4s <- unique(points$huc4)
+  # Do it in a for loop
+  point_huc4s <- vector(mode = "character", length = nrow(points))
+  for(i in seq_len(nrow(points))) {
+    point_geom <- st_geometry(dwsa[i,])
+    huc <- get_huc(point_gem)
+
+    # Let's subset all the hucs to the first 4 digits, then pick the huc4 that
+    # appears most in the table
+    huc4 <- substr(huc$huc12, start = 1, stop = 4)
+
+    point_huc4s[i] <- huc4
+  }
+
+  huc4s <- unique(point_huc4s)
   gdb_dirs <- file.path(nhdplusdir,
                         substr(huc4s, 1, 2),
                         paste0("NHDPLUS_H_",
@@ -253,6 +262,8 @@ delineate_watersheds <- function(points,
   stopifnot("Error: Cannot find GDB of NHDplusHR for all HUC4s. Try downloading using download_nhdplushr" = file.exists(gdb_dirs))
 
   # Split points into huc4 groups list
+  points$huc4 <- point_huc4s
+
   split_points_by_huc4 <- points %>%
     arrange(.data$huc4) %>%
     split(.data$huc4)
